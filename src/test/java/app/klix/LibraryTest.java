@@ -3,12 +3,416 @@
  */
 package app.klix;
 
+import app.klix.callback.OrderVerificationCallback;
+import app.klix.callback.PurchaseConfirmationCallback;
+import app.klix.callback.ShippingCostCalculationCallback;
+import app.klix.encoder.JwsEncoder;
+import app.klix.order.KlixMerchantUrls;
+import app.klix.order.KlixOrderItem;
+import app.klix.order.KlixOrderStatus;
+import app.klix.order.KlixPaymentStatus;
+import app.klix.order.KlixRejectReason;
+import app.klix.request.ApproveOrderRequest;
+import app.klix.request.GetOrderRequest;
+import app.klix.request.RejectOrderRequest;
+import app.klix.response.GetOrderResponse;
+import app.klix.rest.KlixConnector;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+@Slf4j
 class LibraryTest {
     @Test
-    void testSomeLibraryMethod() {
-        KlixClient classUnderTest = new KlixClient();
-        assertTrue(classUnderTest.someLibraryMethod(), "someLibraryMethod should return 'true'");
+    void GetOrderResponseMapping() {
+        KlixClient klixClient = new KlixClient();
+
+        String exampleJson = "{\n" +
+                "    \"id\": \"7728d220-5723-4e20-a800-454418f31739\",\n" +
+                "    \"status\": \"VERIFIED\",\n" +
+                "    \"customer\": {\n" +
+                "        \"first_name\": \"Name\",\n" +
+                "        \"last_name\": \"Surname\",\n" +
+                "        \"email\": \"email@email.com\",\n" +
+                "        \"phone_number\": \"3712945600\"\n" +
+                "    },\n" +
+                "    \"company\": {\n" +
+                "        \"address\": \"Example address\",\n" +
+                "        \"name\": \"Great Company\",\n" +
+                "        \"registration_number\": \"REG.NUM.2333\",\n" +
+                "        \"vat_number\": \"VAT23232324\"\n" +
+                "    },\n" +
+                "    \"order_id\": \"37616d8b-8ed0-4cd7-88d7-13b320ae14dc\",\n" +
+                "    \"amount\": null,\n" +
+                "    \"tax_amount\": 115.19,\n" +
+                "    \"total_amount\": 663.69,\n" +
+                "    \"items\": [\n" +
+                "        {\n" +
+                "            \"amount\": 100,\n" +
+                "            \"label\": \"Dummy Ticket\",\n" +
+                "            \"tax_amount\": 21,\n" +
+                "            \"total_amount\": 121,\n" +
+                "            \"tax_rate\": 0.21,\n" +
+                "            \"order_item_id\": null,\n" +
+                "            \"quantity\": 1,\n" +
+                "            \"unit\": \"PIECE\",\n" +
+                "            \"type\": \"UNKNOWN\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "            \"amount\": 199.5,\n" +
+                "            \"label\": \"Early Bird Ticket\",\n" +
+                "            \"tax_amount\": 41.895,\n" +
+                "            \"total_amount\": 241.395,\n" +
+                "            \"tax_rate\": 0.21,\n" +
+                "            \"order_item_id\": null,\n" +
+                "            \"quantity\": 1,\n" +
+                "            \"unit\": \"PIECE\",\n" +
+                "            \"type\": \"UNKNOWN\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "            \"amount\": 249,\n" +
+                "            \"label\": \"Late Bird\",\n" +
+                "            \"tax_amount\": 52.29,\n" +
+                "            \"total_amount\": 301.29,\n" +
+                "            \"tax_rate\": 0.21,\n" +
+                "            \"order_item_id\": null,\n" +
+                "            \"quantity\": 1,\n" +
+                "            \"unit\": \"PIECE\",\n" +
+                "            \"type\": \"UNKNOWN\"\n" +
+                "        }\n" +
+                "    ],\n" +
+                "    \"currency\": \"EUR\",\n" +
+                "    \"merchant_urls\": {\n" +
+                "        \"terms\": \"https://2020.paymentconf.com/terms-and-conditions/\",\n" +
+                "        \"verification\": \"https://tickets.paymentconf.com/api/public/order\",\n" +
+                "        \"confirmation\": \"https://tickets.paymentconf.com/api/public/purchase\",\n" +
+                "        \"place_order\": \"https://2020.paymentconf.com\"\n" +
+                "    },\n" +
+                "    \"shipping\": {\n" +
+                "        \"address\": {\n" +
+                "            \"city\": \"Rīga\",\n" +
+                "            \"country\": \"Latvia\",\n" +
+                "            \"latitude\": 20.32,\n" +
+                "            \"longitude\": 43.98,\n" +
+                "            \"postal_code\": \"LV-1013\",\n" +
+                "            \"street\": \"Mukusalas iela\"\n" +
+                "        },\n" +
+                "        \"contact_phone\": \"37123456789\",\n" +
+                "        \"date\": \"01.11.2019\",\n" +
+                "        \"method\": {\n" +
+                "            \"id\": \"32\",\n" +
+                "            \"name\": \"Truck\"            \n" +
+                "        },\n" +
+                "        \"pickup_point\": {\n" +
+                "            \"external_id\": \"9111\",\n" +
+                "            \"name\": \"Rīgas Briāna ielas Rimi pakomāts\",\n" +
+                "            \"comments\": \"Pa labi no galvenās ieejas\",\n" +
+                "            \"service_hours\": \"P-Pk.piegāde 10:00, izņemšana 17:00 Sestdienās piegāde 14:00,izņemšana 14:00\"\n" +
+                "        },\n" +
+                "        \"type\": \"Truck\"\n" +
+                "     }\n" +
+                "}";
+
+        ObjectMapper mapper = klixClient.getObjectMapper();
+
+        try {
+            GetOrderResponse orderResponse = mapper.readValue(exampleJson, GetOrderResponse.class);
+
+            log.info(orderResponse.toString());
+
+            assertEquals("7728d220-5723-4e20-a800-454418f31739", orderResponse.getId(), "Id should be set");
+            assertEquals(orderResponse.getStatus(), KlixOrderStatus.VERIFIED, "Order status should be set");
+            assertEquals("Name", orderResponse.getCustomer().getFirst_name(), "First name should be set");
+            assertEquals("Surname", orderResponse.getCustomer().getLast_name(), "Last name should be set");
+            assertEquals("email@email.com", orderResponse.getCustomer().getEmail(), "Email should be set");
+            assertEquals("3712945600", orderResponse.getCustomer().getPhone_number(), "Phone number should be set");
+
+            //KlixCompany
+            assertEquals("Example address", orderResponse.getCompany().getAddress(), "Company address should be set");
+            assertEquals("Great Company", orderResponse.getCompany().getName(), "Company name should be set");
+            assertEquals("REG.NUM.2333", orderResponse.getCompany().getRegistration_number(), "Company registration number should be set");
+            assertEquals("VAT23232324", orderResponse.getCompany().getVat_number(), "Company VAT number should be set");
+
+            assertEquals("37616d8b-8ed0-4cd7-88d7-13b320ae14dc", orderResponse.getOrder_id(), "Order Id should be set");
+            assertNull(orderResponse.getAmount(), "Order amount should be null");
+            assertEquals(0, orderResponse.getTax_amount().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(115.19).setScale(2, RoundingMode.HALF_UP)), "Order tax amount should be set");
+            assertEquals(0, orderResponse.getTotal_amount().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(663.69).setScale(2, RoundingMode.HALF_UP)), "Order total amount should be set");
+
+            //KlixOrderItem
+            KlixOrderItem[] orderItems = orderResponse.getItems();
+            assertEquals(3, orderItems.length, "Order items length should be 3");
+            assertEquals(0, orderItems[0].getAmount().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(100).setScale(2, RoundingMode.HALF_UP)), "Item[0] amount should be set");
+            assertEquals("Dummy Ticket", orderItems[0].getLabel(), "Order Id should be set");
+            assertEquals(0, orderItems[0].getTax_amount().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(21).setScale(2, RoundingMode.HALF_UP)), "Item[0] tax amount should be set");
+            assertEquals(0, orderItems[0].getTotal_amount().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(121).setScale(2, RoundingMode.HALF_UP)), "Item[0] total amount should be set");
+            assertEquals(0, orderItems[0].getTax_rate().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(0.21).setScale(2, RoundingMode.HALF_UP)), "Item[0] tax rate should be set");
+            assertNull(orderItems[0].getOrder_item_id(), "Item[0] id should be null");
+            assertEquals(0, orderItems[0].getQuantity().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(1).setScale(2, RoundingMode.HALF_UP)), "Item[0] quantity should be set");
+            assertEquals("PIECE", orderItems[0].getUnit(), "Item[0] unit should be set");
+            assertEquals("UNKNOWN", orderItems[0].getType(), "Item[0] type should be set");
+            assertNull(orderItems[0].getReference(), "Item[0] reference should be null");
+
+            assertEquals("EUR", orderResponse.getCurrency(), "Item[0] currency should be set");
+
+            //KlixMerchantUrls
+            KlixMerchantUrls merchantUrls = orderResponse.getMerchant_urls();
+            assertEquals("https://tickets.paymentconf.com/api/public/purchase", merchantUrls.getConfirmation(), "MerchantUrls confirmation link Id should be set");
+            assertEquals("https://2020.paymentconf.com", merchantUrls.getPlace_order(), "MerchantUrls place order link should be set");
+            assertEquals("https://2020.paymentconf.com/terms-and-conditions/", merchantUrls.getTerms(), "MerchantUrls terms link should be set");
+            assertEquals("https://tickets.paymentconf.com/api/public/order", merchantUrls.getVerification(), "MerchantUrls verification link should be set");
+
+            //KlixShipping
+            assertEquals(orderResponse.getShipping().getAddress().getCity(), "Rīga",  "Address city should be set");
+            assertEquals(orderResponse.getShipping().getAddress().getCountry(), "Latvia",  "Address country should be set");
+            assertEquals(orderResponse.getShipping().getAddress().getLatitude(), 20.32,  "Address latitude should be set");
+            assertEquals(orderResponse.getShipping().getAddress().getLongitude(), 43.98,  "Address longitude should be set");
+            assertEquals(orderResponse.getShipping().getAddress().getPostal_code(), "LV-1013",  "Address postal code should be set");
+            assertEquals(orderResponse.getShipping().getAddress().getStreet(), "Mukusalas iela",  "Address street should be set");
+            assertEquals(orderResponse.getShipping().getContact_phone(), "37123456789",  "Shipping contact phone should be set");
+            assertEquals(orderResponse.getShipping().getDate(), "01.11.2019",  "Shipping date should be set");
+            assertEquals(orderResponse.getShipping().getMethod().getId(), "32",  "ShippingMethod Id should be set");
+            assertEquals(orderResponse.getShipping().getMethod().getName(), "Truck",  "ShippingMethod name should be set");
+            assertEquals(orderResponse.getShipping().getPickup_point().getComments(), "Pa labi no galvenās ieejas",  "Pickup point comments should be set");
+            assertEquals(orderResponse.getShipping().getPickup_point().getExternal_id(), "9111",  "Pickup point external id should be set");
+            assertEquals(orderResponse.getShipping().getPickup_point().getName(), "Rīgas Briāna ielas Rimi pakomāts",  "Pickup point name should be set");
+            assertEquals(orderResponse.getShipping().getPickup_point().getService_hours(),
+                    "P-Pk.piegāde 10:00, izņemšana 17:00 Sestdienās piegāde 14:00,izņemšana 14:00",  "Pickup point service hours should be set");
+            assertEquals(orderResponse.getShipping().getType(), "Truck",  "Shipping type should be set");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
+
+    @Test
+    void OrderVerificationCallbackMapping() {
+        KlixClient klixClient = new KlixClient();
+
+        String exampleJson = "{\n" +
+                "    \"orderId\": \"7728d220-5723-4e20-a800-454418f31739\",\n" +
+                "    \"externalOrderId\": \"37616d8b-8ed0-4cd7-88d7-13b320ae14dc\"\n" +
+                "}";
+
+        ObjectMapper mapper = klixClient.getObjectMapper();
+
+        try {
+            OrderVerificationCallback orderVerificationCallback = mapper.readValue(exampleJson, OrderVerificationCallback.class);
+
+            log.info(orderVerificationCallback.toString());
+
+            assertEquals("7728d220-5723-4e20-a800-454418f31739", orderVerificationCallback.getOrderId(), "Order Id should be set");
+            assertEquals("37616d8b-8ed0-4cd7-88d7-13b320ae14dc", orderVerificationCallback.getExternalOrderId(), "External order Id should be set");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    void PurchaseConfirmationCallbackMapping() {
+        KlixClient klixClient = new KlixClient();
+
+        String exampleJson = "{\n" +
+                "    \"status\": \"PAYMENT_APPROVED\",\n" +
+                "    \"orderId\": \"7728d220-5723-4e20-a800-454418f31739\",\n" +
+                "    \"externalOrderId\": \"37616d8b-8ed0-4cd7-88d7-13b320ae14dc\"\n" +
+                "}";
+
+        ObjectMapper mapper = klixClient.getObjectMapper();
+
+        try {
+            PurchaseConfirmationCallback purchaseConfirmationCallback = mapper.readValue(exampleJson, PurchaseConfirmationCallback.class);
+
+            log.info(purchaseConfirmationCallback.toString());
+
+            assertEquals(purchaseConfirmationCallback.getStatus(), KlixPaymentStatus.PAYMENT_APPROVED, "Order status should be set");
+            assertEquals("7728d220-5723-4e20-a800-454418f31739", purchaseConfirmationCallback.getOrderId(), "Order Id should be set");
+            assertEquals("37616d8b-8ed0-4cd7-88d7-13b320ae14dc", purchaseConfirmationCallback.getExternalOrderId(), "External order Id should be set");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Test
+    void ShippingCostCalculationCallbackMapping() {
+        KlixClient klixClient = new KlixClient();
+
+        String exampleJson = "{  \n" +
+                "    \"order_id\": \"05957e7f-803f-46f0-9100-1c3e10199b43\",\n" +
+                "    \"items\": [\n" +
+                "        {\n" +
+                "            \"amount\": 100,\n" +
+                "            \"label\": \"Dummy Ticket\",\n" +
+                "            \"tax_amount\": 21,\n" +
+                "            \"total_amount\": 121,\n" +
+                "            \"tax_rate\": 0.21,\n" +
+                "            \"order_item_id\": null,\n" +
+                "            \"quantity\": 1,\n" +
+                "            \"unit\": \"PIECE\",\n" +
+                "            \"type\": \"UNKNOWN\"\n" +
+                "        },\n" +
+                "        {\n" +
+                "            \"amount\": 199.5,\n" +
+                "            \"label\": \"Early Bird Ticket\",\n" +
+                "            \"tax_amount\": 41.895,\n" +
+                "            \"total_amount\": 241.395,\n" +
+                "            \"tax_rate\": 0.21,\n" +
+                "            \"order_item_id\": null,\n" +
+                "            \"quantity\": 1,\n" +
+                "            \"unit\": \"PIECE\",\n" +
+                "            \"type\": \"UNKNOWN\"\n" +
+                "        }\n" +
+                "    ],\n" +
+                "    \"shipping_method_id\": \"omniva\",\n" +
+                "    \"address\": {\n" +
+                "        \"city\": \"Rīga\",\n" +
+                "        \"country\": \"Latvia\",\n" +
+                "        \"postal_code\": \"LV-1013\"\n" +
+                "    },\n" +
+                "    \"pickup_point\": {\n" +
+                "        \"external_id\": \"9111\",\n" +
+                "        \"name\": \"Rīgas Briāna ielas Rimi pakomāts\",\n" +
+                "        \"comments\": \"Pa labi no galvenās ieejas\",\n" +
+                "        \"service_hours\": \"P-Pk.piegāde 10:00, izņemšana 17:00 Sestdienās piegāde 14:00,izņemšana 14:00\"\n" +
+                "    }\n" +
+                "}";
+
+        ObjectMapper mapper = klixClient.getObjectMapper();
+
+        try {
+            ShippingCostCalculationCallback shippingCostCalculationCallback = mapper.readValue(exampleJson, ShippingCostCalculationCallback.class);
+
+            log.info(shippingCostCalculationCallback.toString());
+
+            assertEquals("05957e7f-803f-46f0-9100-1c3e10199b43", shippingCostCalculationCallback.getOrder_id(), "Order Id should be set");
+
+            //KlixOrderItems
+            KlixOrderItem[] orderItems = shippingCostCalculationCallback.getItems();
+            assertEquals(2, orderItems.length, "Order items length should be 2");
+            assertEquals(0, orderItems[1].getAmount().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(199.5).setScale(2, RoundingMode.HALF_UP)), "Item[1] amount should be set");
+            assertEquals("Early Bird Ticket", orderItems[1].getLabel(), "Order Id should be set");
+            assertEquals(0, orderItems[1].getTax_amount().setScale(3, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(41.895).setScale(3, RoundingMode.HALF_UP)), "Item[1] tax amount should be set");
+            assertEquals(0, orderItems[1].getTotal_amount().setScale(3, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(241.395).setScale(3, RoundingMode.HALF_UP)), "Item[1] total amount should be set");
+            assertEquals(0, orderItems[1].getTax_rate().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(0.21).setScale(2, RoundingMode.HALF_UP)), "Item[1] tax rate should be set");
+            assertNull(orderItems[1].getOrder_item_id(), "Item[1] id should be null");
+            assertEquals(0, orderItems[1].getQuantity().setScale(2, RoundingMode.HALF_UP)
+                    .compareTo(new BigDecimal(1).setScale(2, RoundingMode.HALF_UP)), "Item[1] quantity should be set");
+            assertEquals("PIECE", orderItems[1].getUnit(), "Item[1] unit should be set");
+            assertEquals("UNKNOWN", orderItems[1].getType(), "Item[1] type should be set");
+            assertNull(orderItems[1].getReference(), "Item[1] reference should be null");
+
+            assertEquals("omniva", shippingCostCalculationCallback.getShipping_method_id(), "Order shipping method id should be set");
+
+            //KlixAddress
+            assertEquals("Rīga", shippingCostCalculationCallback.getAddress().getCity(), "Address city should be set");
+            assertEquals("Latvia", shippingCostCalculationCallback.getAddress().getCountry(), "Address country should be set");
+            assertNull(shippingCostCalculationCallback.getAddress().getLatitude(), "Address latitude should be null");
+            assertNull(shippingCostCalculationCallback.getAddress().getLongitude(), "Address longitude should be null");
+            assertEquals("LV-1013", shippingCostCalculationCallback.getAddress().getPostal_code(), "Address postal code should be set");
+            assertNull(shippingCostCalculationCallback.getAddress().getStreet(), "Address street should be null");
+
+            //KlixPickupPoint
+            assertEquals("Pa labi no galvenās ieejas", shippingCostCalculationCallback.getPickup_point().getComments(), "PickupPoint comments should be set");
+            assertEquals("9111", shippingCostCalculationCallback.getPickup_point().getExternal_id(), "PickupPoint external id should be set");
+            assertEquals("Rīgas Briāna ielas Rimi pakomāts", shippingCostCalculationCallback.getPickup_point().getName(), "PickupPoint name should be set");
+            assertEquals("P-Pk.piegāde 10:00, izņemšana 17:00 Sestdienās piegāde 14:00,izņemšana 14:00", shippingCostCalculationCallback.getPickup_point().getService_hours(), "PickupPoint service hours should be set");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Test
+    void KlixClientSetup() {
+        KlixClient klixClient = new KlixClient();
+        klixClient.setApiKey("Test Api Key");
+        klixClient.setEnvironment(KlixEnvironment.STAGING);
+        klixClient.setMerchantCertificateId("Test Certificate Id");
+        klixClient.setPrivateKey("Test Private Key".getBytes());
+
+        log.info(klixClient.toString());
+
+        assertEquals("Test Api Key", klixClient.getApiKey(), "Api key should be set");
+        assertEquals(klixClient.getEnvironment(), KlixEnvironment.STAGING, "Klix environment should be set");
+        assertEquals("Test Certificate Id", klixClient.getMerchantCertificateId(), "Merchant certificate id should be set");
+        assertArrayEquals(klixClient.getPrivateKey(), ("Test Private Key".getBytes()), "Private key should be set");
+    }
+
+    @Test
+    void ApproveOrderRequestSetup() {
+        KlixClient klixClient = new KlixClient();
+        klixClient.setApiKey("Test Api Key");
+        klixClient.setEnvironment(KlixEnvironment.STAGING);
+        klixClient.setMerchantCertificateId("Test Certificate Id");
+        klixClient.setPrivateKey("Test Private Key".getBytes());
+
+        KlixConnector klixConnector = new KlixConnector(klixClient, new JwsEncoder());
+
+        ApproveOrderRequest approveOrderRequest = klixClient.approveOrder(klixConnector, "Test Merchant Id", "Test Order Id");
+
+        log.info(approveOrderRequest.toString());
+
+        assertEquals(approveOrderRequest.getMerchantId(), "Test Merchant Id");
+        assertEquals(approveOrderRequest.getOrderId(), "Test Order Id");
+    }
+
+    @Test
+    void GetOrderRequestSetup() {
+        KlixClient klixClient = new KlixClient();
+        klixClient.setApiKey("Test Api Key");
+        klixClient.setEnvironment(KlixEnvironment.STAGING);
+        klixClient.setMerchantCertificateId("Test Certificate Id");
+        klixClient.setPrivateKey("Test Private Key".getBytes());
+
+        KlixConnector klixConnector = new KlixConnector(klixClient, new JwsEncoder());
+
+        GetOrderRequest getOrderRequest = klixClient.retrieveOrderDetails(klixConnector, "Test Merchant Id", "Test Order Id");
+
+        log.info(getOrderRequest.toString());
+
+        assertEquals(getOrderRequest.getMerchantId(), "Test Merchant Id");
+        assertEquals(getOrderRequest.getOrderId(), "Test Order Id");
+    }
+
+    @Test
+    void RejectOrderRequestSetup() {
+        KlixClient klixClient = new KlixClient();
+        klixClient.setApiKey("Test Api Key");
+        klixClient.setEnvironment(KlixEnvironment.STAGING);
+        klixClient.setMerchantCertificateId("Test Certificate Id");
+        klixClient.setPrivateKey("Test Private Key".getBytes());
+
+        KlixConnector klixConnector = new KlixConnector(klixClient, new JwsEncoder());
+
+        RejectOrderRequest rejectOrderRequest = klixClient.rejectOrder(klixConnector, "Test Merchant Id", "Test Order Id", KlixRejectReason.PRICE_CHANGED);
+
+        log.info(rejectOrderRequest.toString());
+
+        assertEquals(rejectOrderRequest.getMerchantId(), "Test Merchant Id");
+        assertEquals(rejectOrderRequest.getOrderId(), "Test Order Id");
+        assertEquals(rejectOrderRequest.getReasonCode(), KlixRejectReason.PRICE_CHANGED);
+    }
+
 }

@@ -1,8 +1,11 @@
-package app.klix;
+package app.klix.request;
 
+import app.klix.response.GetOrderResponse;
 import app.klix.rest.KlixConnector;
 import com.google.common.base.Preconditions;
+import lombok.ToString;
 
+@ToString
 public class GetOrderRequest {
 
     private final KlixConnector connector;
