@@ -26,15 +26,14 @@ public class JwsEncoder {
             jwsObject.sign(signer);
             return jwsObject.serialize();
         } catch (Exception ex) {
-//            log.error(ex.getLocalizedMessage());
+            log.error(ex.getLocalizedMessage());
             return null;
         }
     }
 
     private PrivateKey createPrivateKeyObject(String privateKey) throws NoSuchAlgorithmException, InvalidKeySpecException {
 
-        String temp = privateKey;
-        String privKeyPEM = temp.replace("-----BEGIN PRIVATE KEY-----", "");
+        String privKeyPEM = privateKey.replace("-----BEGIN PRIVATE KEY-----", "");
         privKeyPEM = privKeyPEM.replace("-----END PRIVATE KEY-----", "");
         PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(privKeyPEM.replaceAll("\\n", "").replaceAll("\\r", "")));
         KeyFactory kf = KeyFactory.getInstance("RSA");
