@@ -25,6 +25,15 @@ dependencies {
     implementation("com.google.guava:guava:28.0-jre")
     implementation("org.slf4j:slf4j-api:1.7.28")
     implementation("org.apache.httpcomponents:httpclient:4.5.10")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.9.2")
+    implementation("com.vaadin.external.google:android-json:0.0.20131108.vaadin1")
+    implementation("com.nimbusds:nimbus-jose-jwt:7.2.1")
+
+    //Lombok annotations support
+    annotationProcessor("org.projectlombok:lombok:1.18.8")
+    compileOnly("org.projectlombok:lombok:1.18.8")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.8")
+    testCompileOnly("org.projectlombok:lombok:1.18.8")
 
     // Use JUnit Jupiter API for testing.
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.4.2")

@@ -3,16 +3,30 @@
  */
 package app.klix;
 
+import app.klix.error.KlixException;
+import app.klix.order.KlixRejectReason;
+import app.klix.request.ApproveOrderRequest;
+import app.klix.request.GetOrderRequest;
+import app.klix.request.RejectOrderRequest;
+import app.klix.rest.KlixConnector;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Preconditions;
+import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClients;
 
+@Slf4j
+@ToString
 public final class KlixClient {
 
+    private final HttpClient httpClient = defaultHttpClient();
+    private final ObjectMapper objectMapper = objectMapper();
     private KlixEnvironment environment = KlixEnvironment.STAGING;
-
     private String apiKey;
-
-    private HttpClient httpClient = defaultHttpClient();
+    private byte[] privateKey;
+    private String merchantCertificateId;
 
     private HttpClient defaultHttpClient() {
         return HttpClients.createDefault();
@@ -34,20 +48,78 @@ public final class KlixClient {
         this.apiKey = apiKey;
     }
 
+    public byte[] getPrivateKey() {
+        return privateKey;
+    }
+
+    public void setPrivateKey(byte[] privateKey) {
+        this.privateKey = privateKey;
+    }
+
+    public String getMerchantCertificateId() {
+        return merchantCertificateId;
+    }
+
+    public void setMerchantCertificateId(String merchantCertificateId) {
+        this.merchantCertificateId = merchantCertificateId;
+    }
+
     public HttpClient getHttpClient() {
         return httpClient;
     }
 
-    public void setHttpClient(HttpClient httpClient) {
-        this.httpClient = httpClient;
+    public ObjectMapper getObjectMapper() {
+        return objectMapper;
     }
 
-    public void validate() {
-        // TODO check all parameters
+    private void validateClientForRejectOrApprove() {
+        try {
+            Preconditions.checkNotNull(environment);
+            Preconditions.checkNotNull(merchantCertificateId);
+            Preconditions.checkNotNull(privateKey);
+        } catch (NullPointerException e) {
+            throw new KlixException("KlixClient properties apiKey or/and environment or/and privateKey are null", e);
+        }
     }
 
-    public GetOrderRequest retrieveOrderDetails() {
-        return new GetOrderRequest();
+    private void validateClientForGet() {
+        try {
+            Preconditions.checkNotNull(environment);
+            Preconditions.checkNotNull(apiKey);
+        } catch (NullPointerException e) {
+            throw new KlixException("KlixClient properties apiKey or/and environment are null", e);
+        }
+    }
+
+    public GetOrderRequest retrieveOrderDetails(KlixConnector connector, String merchantId, String orderId) {
+        validateClientForGet();
+        GetOrderRequest getOrderRequest = new GetOrderRequest(connector);
+        getOrderRequest.withMerchantId(merchantId);
+        getOrderRequest.withOrderId(orderId);
+        return getOrderRequest;
+    }
+
+    public RejectOrderRequest rejectOrder(KlixConnector connector, String merchantId, String orderId, KlixRejectReason rejectReason) {
+        validateClientForRejectOrApprove();
+        RejectOrderRequest rejectOrderRequest = new RejectOrderRequest(connector);
+        rejectOrderRequest.withMerchantId(merchantId);
+        rejectOrderRequest.withOrderId(orderId);
+        rejectOrderRequest.withReasonCode(rejectReason);
+        return rejectOrderRequest;
+    }
+
+    public ApproveOrderRequest approveOrder(KlixConnector connector, String merchantId, String orderId) {
+        validateClientForRejectOrApprove();
+        ApproveOrderRequest approveOrderRequest = new ApproveOrderRequest(connector);
+        approveOrderRequest.withMerchantId(merchantId);
+        approveOrderRequest.withOrderId(orderId);
+        return approveOrderRequest;
+    }
+
+    private ObjectMapper objectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        return objectMapper;
     }
 
 }
